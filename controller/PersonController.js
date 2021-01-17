@@ -1,29 +1,53 @@
+import SECRET from "../infra/secret.js";
+import jwt from "jsonwebtoken";
 
 export default class PersonController {
+  Autheticate(request, callback) {
+    var token = request.headers["x-access-token"];
+    if (!token)
+      return callback({ auth: false, message: "Nenhum token informado" });
 
-    Init(server, repository) {
-
-        server.get("/people", (request, response) => {
-            repository.RetrieveAll((error, result) => {
-                if(error){
-                    console.log(error);
-                    return response.status(500).send({});
-                }
-                
-                response.send(result);
-            });
+    jwt.verify(token, SECRET, function (err, decoded) {
+      if (err)
+        return callback({
+          auth: false,
+          message: "Falha ao autenticar o token",
         });
 
-        server.post("/people", (request, response) => {
-            repository.Save(request.body, (error, result) => {
-                if(error){
-                    console.log(error);
-                    return response.status(500).send({});
-                }
-                return response.status(201).send({});
-            });
-        });
+      console.log("Requisição com JWT " + JSON.stringify(decoded));
+      callback({ auth: true, message: "" });
+    });
+  }
 
-        return "";
-    }
+  Init(server, repository, userRepository) {
+    server.get("/people", (request, response) => {
+      this.Autheticate(request, (authResult) => {
+        if (!authResult.auth) return response.status(401).send(authResult);
+
+        repository.RetrieveAll((error, result) => {
+          if (error) {
+            console.log(error);
+            return response.status(500).send({});
+          }
+
+          response.send(result);
+        });
+      });
+    });
+
+    server.post("/people", (request, response) => {
+      this.Autheticate(request, (authResult) => {
+        if (!authResult.auth) return response.status(401).send(authResult);
+        repository.Save(request.body, (error, result) => {
+          if (error) {
+            console.log(error);
+            return response.status(500).send({});
+          }
+          return response.status(201).send({});
+        });
+      });
+    });
+
+    return "";
+  }
 }
